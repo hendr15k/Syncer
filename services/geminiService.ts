@@ -55,7 +55,7 @@ function encodeBase64(bytes: Uint8Array): string {
 }
 
 function concatAudioBuffers(buffers: Uint8Array[]): Uint8Array {
-  const silenceLen = 4800; // 0.2s silence at 24kHz
+  const silenceLen = 9600; // 0.2s silence at 24kHz (16-bit PCM = 2 bytes per sample)
   const silence = new Uint8Array(silenceLen); 
 
   const processedBuffers = buffers.map(b => {
@@ -218,8 +218,8 @@ function getVoiceForSpeaker(speakerName: string, narratorVoiceName: VoiceName): 
 
 function getGeminiKey(): string {
   const key = process.env.API_KEY;
-  if (!key) {
-      throw new Error("Gemini API Key fehlt. Bitte setzen Sie process.env.API_KEY.");
+  if (!key || key === 'undefined') {
+      throw new Error("Gemini API Key fehlt. Bitte setzen Sie GEMINI_API_KEY in Ihrer .env.local Datei und starten Sie den Server neu.");
   }
   return key;
 }
@@ -311,7 +311,7 @@ export async function generateSceneImage(text: string): Promise<string> {
 
   return withRetry(async () => {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-1.5-flash',
       contents: { parts: [{ text: prompt }] },
     });
 
@@ -324,7 +324,7 @@ export async function generateSceneImage(text: string): Promise<string> {
   });
 }
 
-// "THE BRAIN" - Uses Gemini 3 Flash for Analysis
+// "THE BRAIN" - Uses Gemini 2.0 Flash for Analysis
 async function analyzeTextForSegments(text: string): Promise<Array<{speaker: string, text: string}>> {
   const ai = new GoogleGenAI({ apiKey: getGeminiKey() });
   
@@ -356,9 +356,9 @@ async function analyzeTextForSegments(text: string): Promise<Array<{speaker: str
 
   return apiQueue.add(() => withRetry(async () => {
     try {
-        // REQUESTED: Use Gemini 3 Flash Preview for the Auto-Cast Logic
+        // Use Gemini 2.0 Flash for the Auto-Cast Logic
         const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview", 
+            model: "gemini-2.0-flash",
             contents: promptContent,
             config: {
                 responseMimeType: "application/json",
@@ -372,12 +372,12 @@ async function analyzeTextForSegments(text: string): Promise<Array<{speaker: str
         throw new Error("Empty segmentation");
     } catch (error: any) {
         const msg = (error.message || JSON.stringify(error)).toLowerCase();
-        console.warn("Gemini 3 Flash segmentation failed, checking fallback...", msg);
+        console.warn("Gemini 2.0 Flash segmentation failed, checking fallback...", msg);
         
-        // Fallback to 2.5 Flash if 3 Flash is unavailable/permission denied
+        // Fallback to 1.5 Flash if 2.0 Flash is unavailable
         if (msg.includes('permission') || msg.includes('403') || msg.includes('not found') || msg.includes('404')) {
             const fallbackResponse = await ai.models.generateContent({
-                model: "gemini-2.5-flash-preview",
+                model: "gemini-1.5-flash",
                 contents: promptContent,
                 config: {
                     responseMimeType: "application/json",
@@ -418,8 +418,8 @@ async function generateSingleSpeakerAudio(text: string, voice: VoiceName, model:
         const msg = (err.message || "").toString();
         // Smart Fallback: If Cloud TTS fails (e.g. quota/auth), try Gemini TTS as backup
         if (msg === "API_KEY_INVALID_GCP" || msg.includes("403") || msg.includes("permission denied")) {
-            console.warn(`GCP TTS fehlgeschlagen (${model}), fallback auf Gemini 2.5 Flash TTS.`);
-            return await generateGeminiAudioRaw(text, voice, TTSModel.Gemini2_5_Flash_TTS);
+            console.warn(`GCP TTS fehlgeschlagen (${model}), fallback auf Gemini 1.5 Flash.`);
+            return await generateGeminiAudioRaw(text, voice, TTSModel.Gemini1_5_Flash);
         }
         throw err;
       }
