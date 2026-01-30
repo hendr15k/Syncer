@@ -16,7 +16,7 @@ const App: React.FC = () => {
     "Willkommen beim ElevenReader Clone. Fügen Sie hier langen Text ein oder laden Sie ein ePub/PDF hoch, um die 'Bühnenlesung' in Aktion zu sehen. Sobald Sie beginnen, können Sie auf jeden Absatz tippen, um dorthin zu springen, oder auf 'Visualisieren' klicken, um die Szene zu sehen."
   );
   const [selectedVoice, setSelectedVoice] = useState<VoiceName>(VoiceName.Kore);
-  const [selectedModel, setSelectedModel] = useState<TTSModel>(TTSModel.Gemini2_5_Flash_TTS);
+  const [selectedModel, setSelectedModel] = useState<TTSModel>(TTSModel.Gemini1_5_Flash);
   const [useMultiSpeaker, setUseMultiSpeaker] = useState<boolean>(false);
   const [isReaderMode, setIsReaderMode] = useState<boolean>(false);
   
@@ -82,11 +82,6 @@ const App: React.FC = () => {
       gainNodeRef.current = audioContextRef.current.createGain();
       gainNodeRef.current.connect(audioContextRef.current.destination);
     }
-    
-    // Always ensure running
-    if (audioContextRef.current.state === 'suspended') {
-      await audioContextRef.current.resume();
-    }
     return audioContextRef.current;
   };
 
@@ -116,8 +111,10 @@ const App: React.FC = () => {
     setAudioState(prev => ({ 
       ...prev, 
       isPlaying: false, 
+      isLoading: false,
       currentTime: 0, 
-      duration: 0 
+      duration: 0,
+      buffer: null
     }));
   };
 
@@ -221,6 +218,12 @@ const App: React.FC = () => {
 
         // 10. START PLAYBACK
         const safeOffset = Math.min(startOffset, buffer.duration);
+
+        // Ensure context is running before starting
+        if (ctx.state === 'suspended') {
+            await ctx.resume();
+        }
+
         source.start(0, safeOffset);
         sourceNodeRef.current = source;
         
@@ -379,7 +382,10 @@ const App: React.FC = () => {
         <div className="flex items-center gap-2">
             {isReaderMode && (
                 <button 
-                  onClick={() => setIsReaderMode(false)}
+                  onClick={() => {
+                      stopPlaybackFull();
+                      setIsReaderMode(false);
+                  }}
                   className="text-xs font-mono text-stone-500 hover:text-stone-300 transition-colors uppercase"
                 >
                     Text Bearbeiten
@@ -401,7 +407,7 @@ const App: React.FC = () => {
                     <div className="rounded-lg overflow-hidden border border-stone-700 shadow-xl bg-black aspect-square relative group">
                         <img src={generatedImageUrl} alt="Scene" className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
-                            <span className="text-xs text-white/80">Gemini 2.5 Flash Image</span>
+                            <span className="text-xs text-white/80">Gemini 1.5 Flash Image</span>
                         </div>
                     </div>
                </div>
@@ -454,7 +460,7 @@ const App: React.FC = () => {
                         onClick={() => setUseMultiSpeaker(!useMultiSpeaker)}
                         className={`w-8 h-4 rounded-full transition-colors relative ${useMultiSpeaker ? 'bg-indigo-500' : 'bg-stone-800'}`}
                       >
-                        <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${useMultiSpeaker ? 'left-4.5' : 'left-0.5'}`} />
+                        <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${useMultiSpeaker ? 'left-[1.125rem]' : 'left-0.5'}`} />
                       </button>
                   </div>
               </div>
@@ -568,7 +574,7 @@ const App: React.FC = () => {
                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                         <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                            <span className="text-xs text-white/80">Gemini 2.5 Flash Image</span>
+                            <span className="text-xs text-white/80">Gemini 1.5 Flash Image</span>
                         </div>
                     </div>
                  </div>
