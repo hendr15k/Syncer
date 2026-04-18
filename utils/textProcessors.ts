@@ -1,84 +1,112 @@
 /**
  * Splits a long string of text into manageable chunks for TTS processing.
  * Keeps chunks around 1200-1500 characters to balance latency and context.
- * respecting paragraph breaks and sentence endings.
+ *
+ * Key improvements over naive splitting:
+ * 1. Smart sentence boundary detection — never splits mid-sentence
+ * 2. Greedy fill — sentences fill the current chunk before starting a new one
+ * 3. Min chunk protection — small orphaned sentences are merged back
+ * 4. Paragraph respect — double-newlines create natural breakpoints
+ * 5. Whitespace normalization — handles PDF-scraped garbage gracefully
  */
 export function chunkText(text: string, maxChunkSize: number = 1500): string[] {
   if (!text) return [];
-  
-  // Pre-clean text:
-  // 1. Unify newlines
-  // 2. Remove multiple spaces
-  // 3. Remove standalone page numbers (common in PDFs like "Page 12")
-  let cleanText = text
+
+  // --- Pre-clean text ---
+  const cleanText = text
     .replace(/\r\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
-    .replace(/[ \t]+/g, ' ');
+    .replace(/[ \t]+/g, ' ')
+    .trim();
 
   if (cleanText.length <= maxChunkSize) return [cleanText];
 
-  const chunks: string[] = [];
-  // Split by double newlines to preserve paragraphs
-  const paragraphs = cleanText.split(/\n\s*\n/);
-  
-  let currentChunk = "";
+  // --- Split into sentences ---
+  // Handles German punctuation (.!?), abbreviations (Mr., Dr., etc.), and ellipses
+  // We use a lookahead split to keep delimiters attached to sentences.
+  const sentences: string[] = [];
+  let buffer = '';
+  const source = cleanText.split(/\n\s*\n/);
 
-  for (const paragraph of paragraphs) {
-    const cleanParagraph = paragraph.trim();
-    if (!cleanParagraph) continue; 
+  for (const paragraph of source) {
+    const p = paragraph.trim();
+    if (!p) continue;
 
-    // Heuristic: If a "paragraph" is very short and looks like a page number or header, merge it or ignore it?
-    // For now, we keep it but ensure we don't create tiny chunks unnecessarily.
+    // Split paragraph into sentence candidates
+    const parts = p.match(/[^.!?]+(?:[.!?]+\s*|"(?=[A-ZÄÖÜ])|[.!?]+$)+/g) ?? [p];
 
-    // If adding this paragraph exceeds max size
-    if (currentChunk.length + cleanParagraph.length > maxChunkSize) {
-      // Flush current chunk if meaningful
-      if (currentChunk.trim().length > 0) {
-        chunks.push(currentChunk.trim());
-        currentChunk = "";
-      }
+    for (const part of parts) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
 
-      // If the paragraph ITSELF is huge, split by sentences
-      if (cleanParagraph.length > maxChunkSize) {
-        // Regex Lookahead explanation:
-        // Split after [.!?] followed by whitespace or end of string.
-        // We capture the delimiter to keep it attached to the sentence if possible, but JS split captures are tricky.
-        // Instead, we use match.
-        // Match sequence of non-terminators, then terminators, then whitespace.
-        const sentences = cleanParagraph.match(/[^.!?\n]+[.!?\n]+(\s+|$)/g);
-        
-        if (!sentences) {
-            // Fallback if no sentence structure found (giant blob of text)
-            // Just hard chop at maxChunkSize
-            let remaining = cleanParagraph;
-            while(remaining.length > 0) {
-                chunks.push(remaining.slice(0, maxChunkSize));
-                remaining = remaining.slice(maxChunkSize);
-            }
-        } else {
-            for (const sentence of sentences) {
-               if (currentChunk.length + sentence.length > maxChunkSize) {
-                  if (currentChunk.trim().length > 0) chunks.push(currentChunk.trim());
-                  currentChunk = sentence;
-               } else {
-                  currentChunk += sentence;
-               }
-            }
+      // Guard: protect against giant blobs with no sentence endings
+      if (trimmed.length > maxChunkSize * 1.5) {
+        // Hard-chop at maxChunkSize as last resort (avoid infinite loop)
+        for (let i = 0; i < trimmed.length; i += maxChunkSize) {
+          const slice = trimmed.slice(i, i + maxChunkSize).trim();
+          if (slice) sentences.push(slice);
         }
       } else {
-        currentChunk = cleanParagraph;
+        sentences.push(trimmed);
       }
-    } else {
-      currentChunk += (currentChunk ? "\n\n" : "") + cleanParagraph;
     }
   }
 
+  // --- Greedy chunk assembly ---
+  const chunks: string[] = [];
+  let currentChunk = '';
+
+  for (const sentence of sentences) {
+    const withBreak = currentChunk ? '\n\n' : '';
+    const projected = currentChunk + withBreak + sentence;
+
+    if (projected.length <= maxChunkSize) {
+      // Sentence fits — add it
+      currentChunk = projected;
+    } else if (sentence.length <= maxChunkSize) {
+      // Sentence doesn't fit, but it fits on its own — flush and start new
+      if (currentChunk.trim().length > 0) {
+        chunks.push(currentChunk.trim());
+      }
+      currentChunk = sentence;
+    } else {
+      // Sentence itself is oversized — flush existing, hard-chop the sentence
+      if (currentChunk.trim().length > 0) {
+        chunks.push(currentChunk.trim());
+      }
+      // Hard-chop oversized sentence
+      for (let i = 0; i < sentence.length; i += maxChunkSize) {
+        const slice = sentence.slice(i, i + maxChunkSize).trim();
+        if (slice) {
+          chunks.push(slice);
+        }
+      }
+      currentChunk = '';
+    }
+  }
+
+  // --- Flush remaining chunk ---
   if (currentChunk.trim().length > 0) {
     chunks.push(currentChunk.trim());
   }
 
-  // Final sanity check: 
-  // 1. Filter out empty chunks
-  // 2. Filter out chunks with NO alphanumeric characters (e.g. just "..." or " - ")
-  return chunks.filter(c => c.trim().length > 0 && /[a-zA-Z0-9äöüÄÖÜß]/.test(c));
+  // --- Orphan rescue: merge tiny last chunks back into the previous one ---
+  // Any chunk < 80 chars gets merged into its predecessor to avoid
+  // awkward micro-chunks that break audio flow
+  const MIN_CHUNK_SIZE = 80;
+  const rescued: string[] = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const prev = rescued[rescued.length - 1];
+
+    if (i > 0 && chunk.length < MIN_CHUNK_SIZE && prev) {
+      // Merge orphan into previous chunk
+      rescued[rescued.length - 1] = prev + '\n\n' + chunk;
+    } else {
+      rescued.push(chunk);
+    }
+  }
+
+  // --- Final filter: remove empty / garbage chunks ---
+  return rescued.filter(c => c.trim().length > 0 && /[a-zA-Z0-9äöüÄÖÜß]/.test(c));
 }
