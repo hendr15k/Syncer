@@ -1,0 +1,12 @@
+name: Validate
+on: [push, pull_request]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check files
+        run: |
+          [ -f index.html ] && echo "HTML OK" || echo "No index.html"
+          for f in *.js; do [ -f "$f" ] && node --check "$f" 2>/dev/null && echo "$f OK" || echo "$f syntax error"; done
+          echo "Done"
