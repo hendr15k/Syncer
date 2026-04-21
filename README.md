@@ -1,20 +1,33 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Syncer — AI Multi-Speaker Stage Reader
 
-# Run and deploy your AI Studio app
+> Ladet PDFs, EPUBs oder Plain Text hoch und lasst sie euch als Bühenshow mit Szenen-Bildern vorlesen.
 
-This contains everything you need to run your app locally.
+**Multi-Speaker TTS** mit Gemini — jeder Absatz wird automatisch einem anderen Voice zugewiesen, um ein Hörbuch-Erlebnis mit mehreren Sprechern zu erzeugen. Optional können Szenen-Bilder per Gemini generiert werden.
 
-View your app in AI Studio: https://ai.studio/apps/drive/19Yc0OWX1jYNJArHsb0GTK-BKfN2B_29P
+## Features
+
+- **Multi-Speaker TTS** — Absätze automatisch auf mehrere Stimmen verteilt
+- **Szenen-Bilder** — Gemini generiert passende Bilder zum Textabschnitt
+- **Voice Selection** — Wählt zwischen verschiedenen TTS-Stimmen
+- **PDF/EPUB/TXT Support** — Dateien hochladen oder Text direkt einfügen
+- **Playback Controls** — Play/Pause, Speed, Chapter Jump
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
+```bash
+npm install
+npm run dev
+```
 
+**Benötigt:** `GEMINI_API_KEY` in [.env.local](.env.local)
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Tech Stack
+
+React 19 + TypeScript + TailwindCSS + Gemini TTS API
+
+## Links
+
+- [AI Studio App](https://ai.studio/apps/drive/19Yc0OWX1jYNJArHsb0GTK-BKfN2B_29P) — Original Gemini Studio Projekt
+- [Validate CI](https://github.com/hendr15k/Syncer/actions/workflows/validate.yml)
+
+[![Validate](https://github.com/hendr15k/Syncer/actions/workflows/validate.yml/badge.svg)](https://github.com/hendr15k/Syncer/actions/workflows/validate.yml)
