@@ -11,6 +11,8 @@ interface PlayerBarProps {
   disabled?: boolean;
   title?: string;
   isGeneratingImage?: boolean;
+  playbackRate?: number;
+  onSetPlaybackRate?: (rate: number) => void;
 }
 
 export const PlayerBar: React.FC<PlayerBarProps> = ({
@@ -22,7 +24,9 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
   duration,
   disabled,
   title = "Bereit zur Synthese",
-  isGeneratingImage = false
+  isGeneratingImage = false,
+  playbackRate = 1,
+  onSetPlaybackRate
 }) => {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -86,6 +90,24 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Playback Speed Button */}
+      {onSetPlaybackRate && (
+        <div className="flex flex-col items-center justify-center gap-1 flex-shrink-0">
+          <button
+            onClick={() => {
+              const speeds = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+              const currentIdx = speeds.indexOf(playbackRate);
+              const nextIdx = (currentIdx + 1) % speeds.length;
+              onSetPlaybackRate(speeds[nextIdx]);
+            }}
+            className="px-2 py-1 rounded-md bg-stone-800 border border-stone-700 text-stone-300 text-xs font-mono hover:border-indigo-500 transition-colors min-w-[3rem]"
+            title="Playback-Geschwindigkeit"
+          >
+            {playbackRate}×
+          </button>
+        </div>
+      )}
 
       {/* Scene Visualization Button */}
       <button

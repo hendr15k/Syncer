@@ -43,6 +43,12 @@ const App: React.FC = () => {
     buffer: null,
   });
 
+  // Playback speed
+  const [playbackRate, setPlaybackRate] = useState<number>(() => {
+    const saved = localStorage.getItem('syncer-playback-rate');
+    return saved ? parseFloat(saved) : 1;
+  });
+
   // --- Refs for Robust State Management ---
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
@@ -201,6 +207,7 @@ const App: React.FC = () => {
         // 8. CREATE SOURCE
         const source = ctx.createBufferSource();
         source.buffer = buffer;
+        source.playbackRate.value = playbackRate;
         source.connect(gainNodeRef.current!);
         
         // 9. SETUP NEXT CHUNK HANDLER
@@ -656,7 +663,12 @@ const App: React.FC = () => {
         currentTime={audioState.currentTime} 
         duration={audioState.duration} 
         disabled={!audioState.buffer} 
-        title={audioState.buffer ? (useMultiSpeaker ? "Multi-Cast Audio" : "Erzähltes Audio") : "ElevenReader"} 
+        title={audioState.buffer ? (useMultiSpeaker ? "Multi-Cast Audio" : "Erzähltes Audio") : "ElevenReader"}
+        playbackRate={playbackRate}
+        onSetPlaybackRate={(rate) => {
+          setPlaybackRate(rate);
+          localStorage.setItem('syncer-playback-rate', String(rate));
+        }}
       />
     </div>
   );
